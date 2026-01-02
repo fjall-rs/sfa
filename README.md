@@ -44,8 +44,10 @@ use std::{
 let file = File::create(&path)?;
 let mut file = BufWriter::new(file);
 let mut writer = Writer::from_writer(&mut file);
+
 writer.start("Section 1")?;
 writer.write_all(b"Hello world!\n")?;
+
 writer.finish()?;
 file.get_mut().sync_all()?;
 drop(file);
