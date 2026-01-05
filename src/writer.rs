@@ -78,16 +78,16 @@ impl<W: Write + Seek> Writer<W> {
         Ok(())
     }
 
-    fn append_trailer(mut writer: &mut W, toc: &[TocEntry]) -> crate::Result<()> {
+    fn append_trailer(&mut self) -> crate::Result<()> {
         // Write ToC
-        let toc_pos = writer.stream_position()?;
-        let toc_checksum = TocWriter::write_into(&mut writer, toc)?;
+        let toc_pos = self.writer.stream_position()?;
+        let toc_checksum = TocWriter::write_into(&mut self.writer, self.toc.as_ref())?;
 
-        let after_toc_pos = writer.stream_position()?;
+        let after_toc_pos = self.writer.stream_position()?;
         let toc_len = after_toc_pos - toc_pos;
 
         // Write trailer
-        TrailerWriter::write_into(writer, toc_checksum, toc_pos, toc_len)
+        TrailerWriter::write_into(&mut self.writer, toc_checksum, toc_pos, toc_len)
     }
 
     /// Ensure that the table of contents is sorted by section name, returning whether the table was already sorted.
@@ -119,7 +119,7 @@ impl<W: Write + Seek> Writer<W> {
         log::trace!("Finishing archive");
 
         self.append_toc_entry()?;
-        Self::append_trailer(&mut self.writer, &self.toc)?;
+        self.append_trailer()?;
         self.writer.flush()?;
 
         Ok(self.writer)
