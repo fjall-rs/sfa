@@ -68,14 +68,13 @@ impl TocReader {
 
         let len = reader.read_u32::<LE>()?;
 
-        let mut entries = Vec::with_capacity(len as usize);
-
+        let mut toc = Toc::with_capacity(len as usize);
         for _ in 0..len {
-            entries.push(TocEntry::read_from_file(&mut reader)?);
+            toc.push(TocEntry::read_from_file(&mut reader)?);
         }
 
         reader.checksum().check(toc_checksum)?;
 
-        Ok(Toc(entries))
+        Ok(toc)
     }
 }
