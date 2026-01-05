@@ -4,6 +4,7 @@
 
 use crate::{
     toc::{
+        Toc,
         entry::{SectionName, TocEntry},
         writer::TocWriter,
     },
@@ -17,7 +18,7 @@ pub struct Writer<W: Write + Seek> {
     writer: W,
     last_section_pos: u64,
     section_name: SectionName,
-    toc: Vec<TocEntry>,
+    toc: Toc,
 }
 
 impl<W: Write + Seek> Writer<W> {
@@ -33,7 +34,7 @@ impl<W: Write + Seek> Writer<W> {
             writer,
             last_section_pos: 0,
             section_name: SectionName::new(),
-            toc: Vec::new(),
+            toc: Toc::default(),
         }
     }
 }
@@ -89,20 +90,22 @@ impl<W: Write + Seek> Writer<W> {
         TrailerWriter::write_into(writer, toc_checksum, toc_pos, toc_len)
     }
 
+    /// Ensure that the table of contents is sorted by section name, returning whether the table was already sorted.
+    ///
+    /// For larger tables, sorting may improve lookup performance.
+    pub fn sort_toc(&mut self) -> bool {
+        log::trace!("Sorting table of contents");
+        self.toc.sort_by_name()
+    }
+
     /// Finishes the file.
     ///
     /// # Errors
     ///
     /// Returns error, if an IO error occurred.
     #[allow(clippy::missing_panics_doc)]
-    pub fn finish(mut self) -> crate::Result<()> {
-        log::trace!("Finishing archive");
-
-        self.append_toc_entry()?;
-        Self::append_trailer(&mut self.writer, &self.toc)?;
-        self.writer.flush()?;
-
-        Ok(())
+    pub fn finish(self) -> crate::Result<()> {
+        self.into_inner().map(|_| ())
     }
 
     /// Finishes the file.
