@@ -4,6 +4,7 @@ extern crate afl;
 use arbitrary::{Arbitrary, Unstructured};
 use sfa::{Reader, Writer};
 use std::collections::HashSet;
+use std::fs::File;
 use std::io::{Read, Write};
 
 fn main() {
@@ -19,7 +20,8 @@ fn main() {
         let mut seen = HashSet::new();
 
         {
-            let mut writer = Writer::new_at_path(&path).unwrap();
+            let mut file = File::create(&path).unwrap();
+            let mut writer = Writer::from_writer(&mut file);
 
             for i in 0..num_sections {
                 let mut name: String =
