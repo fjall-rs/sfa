@@ -94,6 +94,26 @@ Future breaking changes will result in a major version bump.
 
 All integers are little-endian encoded.
 
+## Inspecting and manipulating SFA files
+
+To create, dump and exatract SFA files on the command line, install the `sfa` cli, which is not built by default and is gated by the `tool` cargo feature flag:
+
+```sh
+cargo install sfa -F tool
+```
+
+The `sfa` binary should now be installed in `$HOME/.cargo/bin`, which you might need to add to your PATH.
+
+| Description                    | Command                             | Command (Shorthand)                      |
+|--------------------------------|-------------------------------------|------------------------------------------|
+| Create an SFA file             | `sfa create file.sfa f1.txt f2.txt` | `sfa c file.sfa f1.txt f2.txt`           |
+| Test and dump SFA file         | `sfa dump file.sfa`                 | `sfa d file.sfa` <br> `sfa t file.sfa`   |
+| Test and hexdump content       | `sfa dump --content file.sfa`       | `sfa dC file.sfa` <br> `sfa tC file.sfa` |
+| Extract sections as files      | `sfa extract file.sfa`              | `sfa x file.sfa`                         |
+| Extract with overwrite         | `sfa extract --force file.sfa`      | `sfa xf file.sfa`                        |
+
+See `sfa --help` for a detailed description.
+
 ## License
 
 All source code is licensed under MIT OR Apache-2.0.
