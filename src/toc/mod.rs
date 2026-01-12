@@ -18,13 +18,19 @@ pub struct Toc {
 
 impl Default for Toc {
     fn default() -> Self {
-        Self { entries: Vec::default(), is_sorted_by_name: true }
+        Self {
+            entries: Vec::default(),
+            is_sorted_by_name: true,
+        }
     }
 }
 
 impl Toc {
     pub(crate) fn with_capacity(capacity: usize) -> Self {
-        Self { entries: Vec::with_capacity(capacity), is_sorted_by_name: true }
+        Self {
+            entries: Vec::with_capacity(capacity),
+            is_sorted_by_name: true,
+        }
     }
 
     /// Find a section by name.
@@ -44,7 +50,13 @@ impl Toc {
     /// tracking whether or not the table is/ remains sorted.
     pub(crate) fn push(&mut self, entry: TocEntry) {
         let empty: [u8; 0] = [];
-        if self.is_sorted_by_name && self.entries.last().map_or(empty.as_slice(), |e: &TocEntry| e.name()) > entry.name() {
+        if self.is_sorted_by_name
+            && self
+                .entries
+                .last()
+                .map_or(empty.as_slice(), |e: &TocEntry| e.name())
+                > entry.name()
+        {
             self.is_sorted_by_name = false;
         }
         self.entries.push(entry);

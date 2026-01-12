@@ -4,9 +4,9 @@
 
 use crate::{
     toc::{
-        Toc,
         entry::{SectionName, TocEntry},
         writer::TocWriter,
+        Toc,
     },
     trailer::writer::TrailerWriter,
 };
