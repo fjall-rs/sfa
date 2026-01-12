@@ -30,24 +30,36 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust_version }}
-      - name: Add rustfmt
-        run: rustup component add rustfmt
-      - name: Add clippy
-        run: rustup component add clippy
+          components: clippy,rustfmt
       - name: Set up cargo cache
         uses: Swatinem/rust-cache@v2
         with:
           prefix-key: ${{ runner.os }}-cargo
       - name: Install cargo-all-features
         run: cargo install cargo-all-features
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy
       - name: Build permutations
         run: cargo build-all-features
       - name: Run tests
         run: cargo test-all-features
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+      - name: Set up cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ runner.os }}-cargo
+      - name: Clippy
+        run: cargo clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+
   cross:
     timeout-minutes: 5
     name: cross
