@@ -8,7 +8,7 @@ use path_jail;
 use pretty_hex::{HexConfig, PrettyHex};
 use sfa::{Reader, Writer};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 macro_rules! die {
@@ -319,7 +319,6 @@ fn create_command(
     };
 
     let mut writer = Writer::from_writer(&mut file);
-    let mut chunk = vec![0u8; block_size];
 
     for input_file in files {
         // Use the filename (without path) as the section name
@@ -336,27 +335,17 @@ fn create_command(
         }
 
         // Open the input file for reading
-        let mut input = match File::open(input_file) {
+        let input = match File::open(input_file) {
             Ok(f) => f,
             Err(e) => {
                 die!("Error reading file {}: {}", input_file.display(), e);
             }
         };
 
-        // Stream the file content in chunks
-        loop {
-            match input.read(&mut chunk) {
-                Ok(0) => break, // EOF
-                Ok(n) => {
-                    let data = &chunk[..n];
-                    if let Err(e) = writer.write_all(data) {
-                        die!("Error writing section {}: {}", section_name, e);
-                    }
-                }
-                Err(e) => {
-                    die!("Error reading file {}: {}", input_file.display(), e);
-                }
-            }
+        // Stream the file content using buffered copy
+        let mut buffered_reader = BufReader::with_capacity(block_size, input);
+        if let Err(e) = io::copy(&mut buffered_reader, &mut writer) {
+            die!("Error importing file {}: {}", input_file.display(), e);
         }
     }
 
@@ -479,7 +468,6 @@ fn extract_command(
     // Process matching sections, counting as we go
     let mut total_count = 0;
     let mut match_count = 0;
-    let mut chunk = vec![0u8; block_size];
 
     for entry in toc.iter() {
         total_count += 1;
@@ -513,32 +501,20 @@ fn extract_command(
         let mut output_file_jailed =
             safely_open_file_or_die(&dest, &output_path_raw, &output_path_jailed, force);
 
-        match entry.buf_reader(file) {
-            Ok(mut reader) => {
-                'eof: loop {
-                    match reader.read(&mut chunk) {
-                        Ok(0) => break 'eof, // EOF
-                        Ok(n) => {
-                            let data = &chunk[..n];
-                            if let Err(e) = output_file_jailed.write_all(data) {
-                                die!(
-                                    "Error writing to file {}: {e}",
-                                    output_path_jailed.display()
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            die!(
-                                "Error reading section {}: {e}",
-                                output_path_jailed.display()
-                            );
-                        }
-                    }
-                }
-            }
+        let reader = match entry.buf_reader(file) {
+            Ok(r) => r,
             Err(e) => {
                 die!("Error opening section {section_name}: {e}");
             }
+        };
+
+        let mut buffered_reader = BufReader::with_capacity(block_size, reader);
+        if let Err(e) = io::copy(&mut buffered_reader, &mut output_file_jailed) {
+            die!(
+                "Error extracting section {} to file {}: {e}",
+                section_name,
+                output_path_jailed.display()
+            );
         }
 
         // Sync the file to disk
