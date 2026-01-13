@@ -3,7 +3,7 @@
 // (found in the LICENSE-* files in the repository)
 
 use clap::{CommandFactory, Parser, Subcommand};
-use globset::Glob;
+use globset::{Candidate, Glob};
 use path_jail;
 use pretty_hex::{HexConfig, PrettyHex};
 use sfa::{Reader, Writer};
@@ -54,6 +54,20 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Cat SFA file sections to stdout
+    #[command(arg_required_else_help = true)]
+    Cat {
+        /// Path to the SFA file
+        file: std::path::PathBuf,
+
+        /// Only operate on sections matching the glob pattern
+        #[arg(long, short = 's')]
+        section: Option<String>,
+
+        /// Sections to dump (glob matching allowed)
+        #[arg(required = false)]
+        sections: Vec<String>,
+    },
     /// Dump SFA file sections and metadata
     #[command(visible_aliases = ["d", "test", "t"])]
     #[command(arg_required_else_help = true)]
@@ -145,6 +159,17 @@ fn main() {
     let args = Args::parse_from(args);
 
     match args.command {
+        Commands::Cat {
+            file,
+            section,
+            sections,
+        } => {
+            let mut sections = sections.clone();
+            if let Some(s) = section {
+                sections.push(s);
+            }
+            cat_command(&file, &sections);
+        }
         Commands::Dump {
             file,
             content,
@@ -172,23 +197,12 @@ fn main() {
     }
 }
 
-fn build_section_matcher(section_pattern: Option<&str>) -> Option<globset::GlobMatcher> {
-    section_pattern.and_then(|pattern| match Glob::new(pattern) {
-        Ok(glob) => Some(glob.compile_matcher()),
+fn build_matcher_or_die(pattern: &str) -> globset::GlobMatcher {
+    match Glob::new(pattern) {
+        Ok(glob) => glob.compile_matcher(),
         Err(e) => {
             die!("Error parsing glob pattern: {}", e);
         }
-    })
-}
-
-fn section_matches(entry: &sfa::TocEntry, matcher: Option<&globset::GlobMatcher>) -> bool {
-    if let Some(matcher) = matcher {
-        match std::str::from_utf8(entry.name()) {
-            Ok(name) => matcher.is_match(name),
-            Err(_) => false,
-        }
-    } else {
-        true
     }
 }
 
@@ -211,6 +225,58 @@ fn format_section_name(name: &[u8]) -> String {
     }
 }
 
+fn cat_command(file: &std::path::Path, sections: &[String]) {
+    if sections.is_empty() {
+        die!("No section pattern specified, use '*' to cat all sections");
+    }
+
+    let reader = match Reader::new(file) {
+        Ok(r) => r,
+        Err(e) => {
+            die!("Error opening SFA file: {}", e);
+        }
+    };
+
+    let toc = reader.toc();
+
+    if toc.is_empty() {
+        eprintln!("SFA file contains no sections.");
+        return;
+    }
+
+    let matchers: Vec<globset::GlobMatcher> = sections
+        .into_iter()
+        .map(|s| build_matcher_or_die(s))
+        .collect();
+
+    let mut stdout = io::stdout();
+
+    // Process matching sections as we encounter them
+    for entry in toc.iter() {
+        let candidate = Candidate::from_bytes(entry.name());
+        if !matchers.iter().any(|m| m.is_match_candidate(&candidate)) {
+            continue;
+        }
+
+        match entry.buf_reader(file) {
+            Ok(mut reader) => match io::copy(&mut reader, &mut stdout) {
+                Ok(bytes_copied) => {
+                    if bytes_copied != entry.len() {
+                        die!(
+                            "Error: wrote {bytes_copied} but toc entry expected {}",
+                            entry.len()
+                        );
+                    }
+                }
+                Err(e) => die!("Error writing section to stdout: {}", e),
+            },
+            Err(e) => {
+                die!("Error opening section: {}", e);
+            }
+        }
+    }
+}
+
 fn dump_command(file: &std::path::Path, content_dump: bool, section_pattern: Option<&str>) {
     let reader = match Reader::new(file) {
         Ok(r) => r,
@@ -226,7 +292,7 @@ fn dump_command(file: &std::path::Path, content_dump: bool, section_pattern: Opt
         return;
     }
 
-    let matcher = build_section_matcher(section_pattern);
+    let matcher = section_pattern.map(build_matcher_or_die);
 
     println!("SFA file: {}", file.display());
     println!("Number of sections: {}\n", toc.len());
@@ -236,8 +302,10 @@ fn dump_command(file: &std::path::Path, content_dump: bool, section_pattern: Opt
     let mut match_count = 0;
     for (original_idx, entry) in toc.iter().enumerate() {
         total_count += 1;
-        if !section_matches(entry, matcher.as_ref()) {
-            continue;
+        if let Some(m) = matcher.as_ref() {
+            if !m.is_match_candidate(&Candidate::from_bytes(entry.name())) {
+                continue;
+            }
         }
 
         if match_count > 0 {
@@ -275,14 +343,13 @@ fn dump_command(file: &std::path::Path, content_dump: bool, section_pattern: Opt
                                 offset += n as u64;
                             }
                             Err(e) => {
-                                eprintln!("Error reading section content: {}", e);
-                                break;
+                                die!("Error reading section content: {}", e);
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error opening section: {}", e);
+                    die!("Error opening section: {}", e);
                 }
             }
         }
@@ -461,7 +528,7 @@ fn extract_command(
         return;
     }
 
-    let matcher = build_section_matcher(section_pattern);
+    let matcher = section_pattern.map(build_matcher_or_die);
 
     // Process matching sections, counting as we go
     let mut total_count = 0;
@@ -469,8 +536,10 @@ fn extract_command(
 
     for entry in toc.iter() {
         total_count += 1;
-        if !section_matches(entry, matcher.as_ref()) {
-            continue;
+        if let Some(m) = matcher.as_ref() {
+            if !m.is_match_candidate(&Candidate::from_bytes(entry.name())) {
+                continue;
+            }
         }
 
         match_count += 1;
@@ -507,12 +576,21 @@ fn extract_command(
         };
 
         let mut buffered_reader = BufReader::with_capacity(block_size, reader);
-        if let Err(e) = io::copy(&mut buffered_reader, &mut output_file_jailed) {
-            die!(
+
+        match io::copy(&mut buffered_reader, &mut output_file_jailed) {
+            Ok(bytes_copied) => {
+                if bytes_copied != entry.len() {
+                    die!(
+                        "Error: wrote {bytes_copied} but toc entry expected {}",
+                        entry.len()
+                    );
+                }
+            }
+            Err(e) => die!(
                 "Error extracting section {} to file {}: {e}",
                 section_name,
                 output_path_jailed.display()
-            );
+            ),
         }
 
         // Sync the file to disk

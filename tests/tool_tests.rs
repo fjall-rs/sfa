@@ -227,6 +227,231 @@ fn test_create_binary_content() {
 }
 
 // ============================================================================
+// CAT COMMAND TESTS
+// ============================================================================
+
+#[test]
+fn test_cat_all_sections() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    let output = cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("*")
+        .assert()
+        .success();
+
+    // Check raw bytes since output includes binary content from file3.dat
+    let stdout = &output.get_output().stdout;
+    assert!(stdout.windows(b"Hello, world!".len()).any(|w| w == b"Hello, world!"));
+    assert!(stdout.windows(b"Test content".len()).any(|w| w == b"Test content"));
+    assert!(stdout.windows(b"Line 2".len()).any(|w| w == b"Line 2"));
+}
+
+#[test]
+fn test_cat_single_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("file1.txt")
+        .assert()
+        .success()
+        .stdout(predicate::eq("Hello, world!\n"));
+}
+
+#[test]
+fn test_cat_with_section_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg("--section")
+        .arg("file2.txt")
+        .arg(path_to_arg(&archive))
+        .assert()
+        .success()
+        .stdout(predicate::eq("Test content\nLine 2\n"));
+}
+
+#[test]
+fn test_cat_with_section_short_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg("-s")
+        .arg("file1.txt")
+        .arg(path_to_arg(&archive))
+        .assert()
+        .success()
+        .stdout(predicate::eq("Hello, world!\n"));
+}
+
+#[test]
+fn test_cat_glob_pattern() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("file*.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Hello, world!"))
+        .stdout(predicate::str::contains("Test content"));
+}
+
+#[test]
+fn test_cat_multiple_patterns() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("file1.txt")
+        .arg("file2.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Hello, world!"))
+        .stdout(predicate::str::contains("Test content"));
+}
+
+#[test]
+fn test_cat_combined_flag_and_positional() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg("-s")
+        .arg("file1.txt")
+        .arg(path_to_arg(&archive))
+        .arg("file2.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Hello, world!"))
+        .stdout(predicate::str::contains("Test content"));
+}
+
+#[test]
+fn test_cat_no_pattern_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No section pattern specified"));
+}
+
+#[test]
+fn test_cat_nonexistent_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let nonexistent = dir.path().join("nonexistent.sfa");
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&nonexistent))
+        .arg("*")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Error opening SFA file"));
+}
+
+#[test]
+fn test_cat_invalid_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let invalid_file = dir.path().join("invalid.sfa");
+    fs::write(&invalid_file, b"not a valid sfa file").unwrap();
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&invalid_file))
+        .arg("*")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Error opening SFA file"));
+}
+
+#[test]
+fn test_cat_invalid_glob_pattern() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("[invalid")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Error parsing glob pattern"));
+}
+
+#[test]
+fn test_cat_pattern_no_match() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("nonexistent*")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn test_cat_binary_content() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = create_test_archive(&dir);
+
+    let output = cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("file3.dat")
+        .assert()
+        .success();
+
+    // Verify binary content was output correctly
+    let stdout = output.get_output().stdout.clone();
+    assert_eq!(stdout, b"\x00\x01\x02\x03\xff\xfe\xfd");
+}
+
+#[test]
+fn test_cat_empty_archive() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = dir.path().join("empty.sfa");
+    let empty_file = dir.path().join("empty.txt");
+    fs::write(&empty_file, b"").unwrap();
+
+    cargo_bin_cmd!()
+        .arg("create")
+        .arg(path_to_arg(&archive))
+        .arg(path_to_arg(&empty_file))
+        .assert()
+        .success();
+
+    cargo_bin_cmd!()
+        .arg("cat")
+        .arg(path_to_arg(&archive))
+        .arg("*")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("SFA file contains no sections"));
+}
+
+// ============================================================================
 // DUMP COMMAND TESTS
 // ============================================================================
 

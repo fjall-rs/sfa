@@ -109,6 +109,7 @@ The `sfa` binary should now be installed in `$HOME/.cargo/bin`, which you might 
 | Create an SFA file             | `sfa create file.sfa f1.txt f2.txt` | `sfa c file.sfa f1.txt f2.txt`           |
 | Test and dump SFA file         | `sfa dump file.sfa`                 | `sfa d file.sfa` <br> `sfa t file.sfa`   |
 | Test and hexdump content       | `sfa dump --content file.sfa`       | `sfa dC file.sfa` <br> `sfa tC file.sfa` |
+| Cat section(s) to stdout       | `sfa cat --content f1.txt f\*.sfa`  | `sfa cat file.sfa f*.txt`                |
 | Extract sections as files      | `sfa extract file.sfa`              | `sfa x file.sfa`                         |
 | Extract with overwrite         | `sfa extract --force file.sfa`      | `sfa xf file.sfa`                        |
 
