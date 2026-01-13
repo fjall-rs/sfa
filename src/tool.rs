@@ -2,7 +2,7 @@
 // This source code is licensed under both the Apache 2.0 and MIT License
 // (found in the LICENSE-* files in the repository)
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use globset::Glob;
 use path_jail;
 use pretty_hex::{HexConfig, PrettyHex};
@@ -127,14 +127,12 @@ fn main() {
     let mut args: Vec<String> = std::env::args().collect();
 
     // "args stuffing" to support tar-like command shorthands
-    // Only transform if it's a single char command or tar-like shorthand (e.g., "cf", "xf")
+    // Only transform if the verb is not a registered command
     if args.len() >= 2 {
         let arg = args[1].clone();
         if let Some(cmd @ ('d' | 't' | 'x' | 'c')) = arg.chars().next() {
-            // Only transform if it's a single character or tar-like shorthand (2-3 chars with flags)
-            // Don't transform full command names like "create", "dump", "extract"
-            if arg.len() == 1 || (arg.len() <= 3 && arg.chars().skip(1).all(|c| c.is_alphabetic()))
-            {
+            // Make sure we're not transforming actual commands
+            if Args::command().find_subcommand(arg.clone()).is_none() {
                 args.remove(1);
                 if arg.len() > 1 {
                     args.insert(1, format!("-{}", &arg[1..]));
