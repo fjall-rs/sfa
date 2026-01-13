@@ -445,7 +445,7 @@ fn test_dump_empty_archive() {
         .arg(path_to_arg(&archive))
         .assert()
         .success()
-        .stdout(predicate::str::contains("SFA file contains no sections"));
+        .stderr(predicate::str::contains("SFA file contains no sections"));
 }
 
 #[test]
@@ -798,7 +798,7 @@ fn test_extract_empty_archive() {
         .arg(path_to_arg(&archive))
         .assert()
         .success()
-        .stdout(predicate::str::contains("SFA file contains no sections"));
+        .stderr(predicate::str::contains("SFA file contains no sections"));
 }
 
 #[test]
@@ -932,7 +932,7 @@ fn test_create_with_empty_file() {
         .arg(path_to_arg(&output))
         .assert()
         .success()
-        .stdout(predicate::str::contains("SFA file contains no sections"));
+        .stderr(predicate::str::contains("SFA file contains no sections"));
 }
 
 #[test]

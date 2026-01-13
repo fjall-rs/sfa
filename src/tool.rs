@@ -224,7 +224,7 @@ fn dump_command(file: &std::path::Path, content_dump: bool, section_pattern: Opt
     let toc = reader.toc();
 
     if toc.is_empty() {
-        println!("SFA file contains no sections.");
+        eprintln!("SFA file contains no sections.");
         return;
     }
 
@@ -470,7 +470,7 @@ fn extract_command(
     let toc = reader.toc();
 
     if toc.is_empty() {
-        println!("SFA file contains no sections.");
+        eprintln!("SFA file contains no sections.");
         return;
     }
 
