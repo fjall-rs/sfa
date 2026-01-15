@@ -6,6 +6,7 @@ use crate::{
     toc::{
         entry::{SectionName, TocEntry},
         writer::TocWriter,
+        Toc,
     },
     trailer::writer::TrailerWriter,
 };
@@ -17,7 +18,7 @@ pub struct Writer<W: Write + Seek> {
     writer: W,
     last_section_pos: u64,
     section_name: SectionName,
-    toc: Vec<TocEntry>,
+    toc: Toc,
 }
 
 impl<W: Write + Seek> Writer<W> {
@@ -33,7 +34,7 @@ impl<W: Write + Seek> Writer<W> {
             writer,
             last_section_pos: 0,
             section_name: SectionName::new(),
-            toc: Vec::new(),
+            toc: Toc::default(),
         }
     }
 }
@@ -77,16 +78,24 @@ impl<W: Write + Seek> Writer<W> {
         Ok(())
     }
 
-    fn append_trailer(mut writer: &mut W, toc: &[TocEntry]) -> crate::Result<()> {
+    fn append_trailer(&mut self) -> crate::Result<()> {
         // Write ToC
-        let toc_pos = writer.stream_position()?;
-        let toc_checksum = TocWriter::write_into(&mut writer, toc)?;
+        let toc_pos = self.writer.stream_position()?;
+        let toc_checksum = TocWriter::write_into(&mut self.writer, self.toc.as_ref())?;
 
-        let after_toc_pos = writer.stream_position()?;
+        let after_toc_pos = self.writer.stream_position()?;
         let toc_len = after_toc_pos - toc_pos;
 
         // Write trailer
-        TrailerWriter::write_into(writer, toc_checksum, toc_pos, toc_len)
+        TrailerWriter::write_into(&mut self.writer, toc_checksum, toc_pos, toc_len)
+    }
+
+    /// Ensure that the table of contents is sorted by section name, returning whether the table was already sorted.
+    ///
+    /// For larger tables, sorting may improve lookup performance.
+    pub fn sort_toc(&mut self) -> bool {
+        log::trace!("Sorting table of contents");
+        self.toc.sort_by_name()
     }
 
     /// Finishes the file.
@@ -95,14 +104,8 @@ impl<W: Write + Seek> Writer<W> {
     ///
     /// Returns error, if an IO error occurred.
     #[allow(clippy::missing_panics_doc)]
-    pub fn finish(mut self) -> crate::Result<()> {
-        log::trace!("Finishing archive");
-
-        self.append_toc_entry()?;
-        Self::append_trailer(&mut self.writer, &self.toc)?;
-        self.writer.flush()?;
-
-        Ok(())
+    pub fn finish(self) -> crate::Result<()> {
+        self.into_inner().map(|_| ())
     }
 
     /// Finishes the file.
@@ -116,7 +119,7 @@ impl<W: Write + Seek> Writer<W> {
         log::trace!("Finishing archive");
 
         self.append_toc_entry()?;
-        Self::append_trailer(&mut self.writer, &self.toc)?;
+        self.append_trailer()?;
         self.writer.flush()?;
 
         Ok(self.writer)
