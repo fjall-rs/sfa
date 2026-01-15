@@ -244,8 +244,12 @@ fn test_cat_all_sections() {
 
     // Check raw bytes since output includes binary content from file3.dat
     let stdout = &output.get_output().stdout;
-    assert!(stdout.windows(b"Hello, world!".len()).any(|w| w == b"Hello, world!"));
-    assert!(stdout.windows(b"Test content".len()).any(|w| w == b"Test content"));
+    assert!(stdout
+        .windows(b"Hello, world!".len())
+        .any(|w| w == b"Hello, world!"));
+    assert!(stdout
+        .windows(b"Test content".len())
+        .any(|w| w == b"Test content"));
     assert!(stdout.windows(b"Line 2".len()).any(|w| w == b"Line 2"));
 }
 
